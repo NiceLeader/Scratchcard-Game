@@ -34,13 +34,56 @@ function App() {
   const [lastTime, setLastTime] = useState("");
   const [playNumber, setPlayNumber] = useState(4);
 
+  const connectWallet = async () => {
+    try {
+      if (window.ethereum) {
+        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+        setWalletAddress(accounts[0]);
+        setStatus("Portfel podłączony!");
+        
+        window.ethereum.on("accountsChanged", (accounts) => {
+          if (accounts.length > 0) {
+            setWalletAddress(accounts[0]);
+          } else {
+            setWalletAddress("");
+            setStatus("Portfel odłączony");
+          }
+        });
+        
+        window.ethereum.on("chainChanged", (chainId) => {
+          if (chainId !== "0x1") {
+            setStatus("Proszę połączyć się z siecią główną Ethereum!");
+          }
+        });
+        
+        window.ethereum.on("disconnect", () => {
+          setStatus("Odłączono od MetaMask!");
+          setWalletAddress("");
+        });
+      } else {
+        setStatus("Proszę zainstalować MetaMask!");
+      }
+    } catch (error) {
+      console.log("Błąd:", error);
+      setStatus("Błąd podczas łączenia z portfelem");
+    }
+  };
+
   useEffect(() => {
     const asyncWalletAddress = async () => {
       if (walletAddress) {
-        const response = await axios.get(`time/${walletAddress}`);
-        setLastTime(response.data.result);
-        setGameBoxStatus(0);
-        setPlayNumber(Math.floor(Math.random() * 1000000));
+        try {
+          const response = await axios.get(`time/${walletAddress}`);
+          setLastTime(response.data.result);
+          setGameBoxStatus(0);
+          setPlayNumber(Math.floor(Math.random() * 1000000));
+        } catch (error) {
+          console.log("Błąd podczas pobierania czasu:", error);
+          setStatus("Błąd serwera. Sprawdź czy serwer jest uruchomiony.");
+          // Ustawiamy domyślne dane, aby aplikacja mogła działać mimo błędu
+          setLastTime(new Date(new Date().getTime() - 24 * 60 * 60 * 1000).toISOString());
+          setGameBoxStatus(0);
+        }
       } else setGameBoxStatus(4);
     };
     asyncWalletAddress();
@@ -48,11 +91,21 @@ function App() {
 
   useEffect(() => {
     const asyncEffect = async () => {
-      const response = await axios.get(`time/${walletAddress}`);
-      console.log(response.data.result)
-      setLastTime(response.data.result);
-      setGameBoxStatus(0);
-      setPlayNumber(Math.floor(Math.random() * 1000000));
+      if (walletAddress) {
+        try {
+          const response = await axios.get(`time/${walletAddress}`);
+          console.log(response.data.result);
+          setLastTime(response.data.result);
+          setGameBoxStatus(0);
+          setPlayNumber(Math.floor(Math.random() * 1000000));
+        } catch (error) {
+          console.log("Błąd podczas pobierania czasu:", error);
+          setStatus("Błąd serwera. Sprawdź czy serwer jest uruchomiony.");
+          // Ustawiamy domyślne dane, aby aplikacja mogła działać mimo błędu
+          setLastTime(new Date(new Date().getTime() - 24 * 60 * 60 * 1000).toISOString());
+          setGameBoxStatus(0);
+        }
+      }
     };
     asyncEffect();
   }, []);
@@ -63,16 +116,27 @@ function App() {
       const response = await axios.get(`history/${walletAddress}`);
       setHistoryList(response.data.history);
     } catch (error) {
-      console.log("error", error);
+      console.log("Błąd podczas pobierania historii:", error);
+      setStatus("Nie udało się pobrać historii. Sprawdź serwer.");
+      // Ustawiamy pustą historię, aby nie wyświetlał się błąd
+      setHistoryList([]);
     }
   };
 
   const _onPressPlayButton = async () => {
     if (gameBoxStatus === 1) {
     } else {
-      const response = await axios.get(`time/${walletAddress}`);
-      setLastTime(response.data.result);
-      setGameBoxStatus(0);
+      try {
+        const response = await axios.get(`time/${walletAddress}`);
+        setLastTime(response.data.result);
+        setGameBoxStatus(0);
+      } catch (error) {
+        console.log("Błąd podczas pobierania czasu:", error);
+        setStatus("Błąd serwera. Sprawdź czy serwer jest uruchomiony.");
+        // Ustawiamy domyślne dane, aby aplikacja mogła działać mimo błędu
+        setLastTime(new Date(new Date().getTime() - 24 * 60 * 60 * 1000).toISOString());
+        setGameBoxStatus(0);
+      }
     }
   };
 
@@ -91,7 +155,8 @@ function App() {
         playtime: new Date().toString(),
       });
     } catch (error) {
-      console.log("error", error);
+      console.log("Błąd podczas zapisywania wyników:", error);
+      setStatus("Nie udało się zapisać wyników. Sprawdź serwer.");
     }
   };
   return (
@@ -104,9 +169,10 @@ function App() {
       {gameBoxStatus === 2 && <History list={historyList} />}
       {gameBoxStatus === 3 && <GameEnd getearn={playNumber} />}
       <p className="text-white">{currentStatus}</p>
-      <button className="absolute w-[15%] h-[15%] top-[50%] left-0">
+      <button className="absolute w-[15%] h-[15%] top-[50%] left-0" onClick={connectWallet}>
         <img src={IconBack} className="w-full h-full" alt="Settings" />
         <img src={MetaMask} className="absolute left-[35%] top-[40%] w-[30%] h-[35%]" alt="MetaMask" />
+        {walletAddress && <div className="absolute top-[15%] right-[15%] w-[20%] h-[20%] bg-green-500 rounded-full"></div>}
       </button>
       <button className="absolute w-[15%] h-[15%] top-[75%] left-0">
         <img src={IconBack} className="w-full h-full" alt="Sound" />
